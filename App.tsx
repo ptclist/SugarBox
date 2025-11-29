@@ -6,7 +6,8 @@ import { RecordModal } from './components/RecordModal';
 import { BottomNav } from './components/BottomNav';
 import { PrivacyOverlay } from './components/PrivacyOverlay';
 import { LoginModal } from './components/LoginModal';
-import { AppState, BaseRecord, RecordType } from './types';
+import { Timeline } from './components/Timeline';
+import { AppState, BaseRecord, RecordType, GlucoseRecord } from './types';
 import { INITIAL_GLUCOSE_DATA } from './constants';
 
 const App: React.FC = () => {
@@ -127,7 +128,7 @@ const App: React.FC = () => {
   };
 
   // --- Render Helpers ---
-  const glucoseRecords = state.records.filter(r => r.type === 'glucose');
+  const glucoseRecords = state.records.filter(r => r.type === 'glucose') as GlucoseRecord[];
   const latestGlucose = glucoseRecords.length > 0 
     ? glucoseRecords.reduce((prev, current) => (prev.timestamp > current.timestamp) ? prev : current) 
     : undefined;
@@ -243,7 +244,7 @@ const App: React.FC = () => {
           </div>
 
           {/* Chart Section */}
-          <div className="bg-white rounded-3xl shadow-soft p-6 mb-24">
+          <div className="bg-white rounded-3xl shadow-soft p-6 mb-6">
             <div className="flex items-center justify-between mb-2">
                 <h3 className="font-bold text-slate-800">7天趋势</h3>
                 <button className="text-teal-600 text-xs font-semibold flex items-center gap-1">
@@ -252,6 +253,9 @@ const App: React.FC = () => {
             </div>
             <GlucoseChart data={glucoseRecords} />
           </div>
+
+          {/* Timeline Section */}
+          <Timeline records={state.records} />
         </div>
       )}
 
