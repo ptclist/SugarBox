@@ -3,13 +3,15 @@ import React from 'react';
 import { 
   Droplet, HeartPulse, Pill, Utensils, Weight, Ruler, 
   Thermometer, Activity, Dumbbell, Stethoscope, Moon, 
-  Frown, Wind, Footprints, GlassWater, Clock 
+  Frown, Wind, Footprints, GlassWater, Clock, ChevronRight
 } from 'lucide-react';
-import { BaseRecord } from '../types';
+import { BaseRecord, RecordType } from '../types';
 
 interface TimelineProps {
   records: BaseRecord[];
 }
+
+// --- Configuration ---
 
 const ICONS: Record<string, any> = {
   glucose: Droplet,
@@ -29,109 +31,142 @@ const ICONS: Record<string, any> = {
   hydration: GlassWater,
 };
 
-const THEMES: Record<string, { bg: string, text: string }> = {
-  glucose: { bg: 'bg-teal-50', text: 'text-teal-600' },
-  bp: { bg: 'bg-rose-50', text: 'text-rose-600' },
-  medication: { bg: 'bg-emerald-50', text: 'text-emerald-600' },
-  diet: { bg: 'bg-orange-50', text: 'text-orange-600' },
-  weight: { bg: 'bg-indigo-50', text: 'text-indigo-600' },
-  sleep: { bg: 'bg-purple-50', text: 'text-purple-600' },
-  mood: { bg: 'bg-pink-50', text: 'text-pink-600' },
-  heartRate: { bg: 'bg-red-50', text: 'text-red-600' },
-  default: { bg: 'bg-slate-100', text: 'text-slate-500' }
+// Colors for the timeline dots/accents
+const TYPE_COLORS: Record<string, string> = {
+  glucose: 'text-teal-500 bg-teal-50 border-teal-200',
+  bp: 'text-rose-500 bg-rose-50 border-rose-200',
+  medication: 'text-emerald-500 bg-emerald-50 border-emerald-200',
+  diet: 'text-orange-500 bg-orange-50 border-orange-200',
+  weight: 'text-indigo-500 bg-indigo-50 border-indigo-200',
+  sleep: 'text-purple-500 bg-purple-50 border-purple-200',
+  exercise: 'text-blue-500 bg-blue-50 border-blue-200',
+  default: 'text-slate-500 bg-slate-50 border-slate-200',
 };
 
-const getRecordTitle = (type: string) => {
+// --- Helper Functions ---
+
+const formatTime = (timestamp: number) => {
+  return new Date(timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+};
+
+const getContextLabel = (context: string) => {
   const map: Record<string, string> = {
-    glucose: '血糖', bp: '血压', medication: '用药', diet: '饮食',
-    weight: '体重', height: '身高', temperature: '体温', heartRate: '心率',
-    exercise: '运动', symptoms: '症状', sleep: '睡眠', mood: '心情',
-    oxygen: '血氧', steps: '步数', hydration: '饮水'
+    fasting: '空腹', 'post-meal': '餐后', 'pre-meal': '餐前',
+    bedtime: '睡前', 'post-breakfast': '早餐后', 'post-lunch': '午餐后', 'post-dinner': '晚餐后',
+    sitting: '坐姿', lying: '卧姿', standing: '站姿',
+    breakfast: '早餐', lunch: '午餐', dinner: '晚餐', snack: '加餐',
+    good: '良好', poor: '较差', fair: '一般', excellent: '极佳'
   };
-  return map[type] || '记录';
+  return map[context] || context;
 };
 
-const formatValue = (record: any) => {
-  switch (record.type) {
-    case 'glucose':
-      const val = parseFloat(record.value);
-      let colorClass = 'text-slate-800';
-      if (val < 3.9) colorClass = 'text-red-500';
-      if (val > 11.1) colorClass = 'text-orange-500';
-      return (
-        <div className="flex items-baseline gap-1">
-          <span className={`text-lg font-bold ${colorClass}`}>{record.value}</span>
-          <span className="text-xs text-slate-400">{record.unit}</span>
-          <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px]">
-             {record.context === 'fasting' ? '空腹' : 
-              record.context === 'bedtime' ? '睡前' : '餐后'}
-          </span>
-        </div>
-      );
-    case 'bp':
-      return (
-        <div className="flex flex-col">
-          <div className="flex items-baseline gap-1">
-            <span className="text-lg font-bold text-slate-800">{record.systolic}/{record.diastolic}</span>
-            <span className="text-xs text-slate-400">mmHg</span>
-          </div>
-          {record.pulse && <span className="text-xs text-slate-400">心率 {record.pulse} bpm</span>}
-        </div>
-      );
-    case 'diet':
-      return (
-        <div className="flex flex-col">
-            <span className="text-sm font-medium text-slate-700">{record.food}</span>
-            <div className="flex gap-2 text-xs text-slate-400 mt-0.5">
-                <span>{record.calories ? `${record.calories} kcal` : ''}</span>
-                <span className="capitalize">{record.mealType === 'breakfast' ? '早餐' : record.mealType === 'lunch' ? '午餐' : record.mealType === 'dinner' ? '晚餐' : '加餐'}</span>
-            </div>
-        </div>
-      );
-    case 'medication':
-        return (
-            <div className="flex flex-col">
-                <span className="text-sm font-medium text-slate-700">{record.name}</span>
-                <span className="text-xs text-slate-400">{record.dosage}</span>
-            </div>
-        );
-    case 'sleep':
-        return (
-            <div className="flex items-baseline gap-1">
-                <span className="text-lg font-bold text-slate-800">{record.duration}</span>
-                <span className="text-xs text-slate-400">小时</span>
-                <span className="text-xs text-slate-400 ml-1">({record.quality === 'good' ? '良好' : record.quality === 'poor' ? '较差' : '极佳'})</span>
-            </div>
-        );
-    case 'mood':
-        const moods = ['很差', '较差', '一般', '不错', '开心'];
-        return (
-            <div className="flex flex-col">
-                <span className="text-sm font-medium text-slate-700">{moods[(record.scale || 3) - 1]}</span>
-                {record.note && <span className="text-xs text-slate-400 truncate max-w-[150px]">{record.note}</span>}
-            </div>
-        );
-    default:
-      return (
-        <div className="flex items-baseline gap-1">
-            <span className="text-lg font-bold text-slate-800">{record.value}</span>
-            <span className="text-xs text-slate-400">{record.unit}</span>
-        </div>
-      );
-  }
+// --- Specific Card Components ---
+
+const GlucoseCard = ({ record }: { record: any }) => {
+  const isHigh = record.value > 11.1;
+  const isLow = record.value < 3.9;
+  const valueColor = isHigh ? 'text-orange-500' : isLow ? 'text-red-500' : 'text-slate-800';
+  
+  return (
+    <div className="flex flex-col h-full justify-center">
+      <div className="flex items-baseline gap-1 mb-1">
+        <span className={`text-2xl font-bold tracking-tight ${valueColor}`}>{record.value}</span>
+        <span className="text-xs text-slate-400 font-medium">{record.unit}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${isHigh || isLow ? 'bg-red-50 text-red-500' : 'bg-teal-50 text-teal-600'}`}>
+          {isHigh ? '偏高' : isLow ? '偏低' : '正常'}
+        </span>
+        <span className="text-xs text-slate-400">{getContextLabel(record.context)}</span>
+      </div>
+    </div>
+  );
 };
+
+const BPCard = ({ record }: { record: any }) => (
+  <div className="flex flex-col justify-center h-full">
+    <div className="flex items-baseline gap-2 mb-1">
+      <span className="text-xl font-bold text-slate-800">{record.systolic}</span>
+      <span className="text-sm text-slate-300">/</span>
+      <span className="text-xl font-bold text-slate-800">{record.diastolic}</span>
+      <span className="text-xs text-slate-400">mmHg</span>
+    </div>
+    <div className="flex gap-3 text-xs text-slate-500">
+      <span className="flex items-center gap-1">
+        <Activity size={12} /> {record.pulse} bpm
+      </span>
+    </div>
+  </div>
+);
+
+const DietCard = ({ record }: { record: any }) => (
+  <div className="flex flex-col">
+    <div className="flex justify-between items-start mb-1">
+      <span className="text-sm font-bold text-slate-700">{getContextLabel(record.mealType)}</span>
+      {record.calories && <span className="text-xs font-mono text-orange-500 font-bold">{record.calories} kcal</span>}
+    </div>
+    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed bg-slate-50 p-2 rounded-lg border border-slate-100/50">
+      {record.food}
+    </p>
+  </div>
+);
+
+const MedicationCard = ({ record }: { record: any }) => (
+  <div className="flex items-center gap-3">
+    <div className="flex-1">
+      <h4 className="text-sm font-bold text-slate-700">{record.name}</h4>
+      <p className="text-xs text-slate-400 mt-0.5">剂量: {record.dosage}</p>
+    </div>
+  </div>
+);
+
+const WeightCard = ({ record }: { record: any }) => (
+  <div className="flex items-baseline gap-1">
+    <span className="text-xl font-bold text-slate-800">{record.value}</span>
+    <span className="text-xs text-slate-400">{record.unit}</span>
+  </div>
+);
+
+const SleepCard = ({ record }: { record: any }) => (
+  <div>
+    <div className="flex items-baseline gap-2 mb-1">
+      <span className="text-xl font-bold text-slate-800">{record.duration}</span>
+      <span className="text-xs text-slate-400">小时</span>
+    </div>
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-purple-50 text-purple-600 font-medium">
+       质量: {getContextLabel(record.quality)}
+    </span>
+  </div>
+);
+
+const DefaultCard = ({ record }: { record: any }) => (
+  <div className="flex items-center gap-2">
+    <span className="text-base font-bold text-slate-700">{record.value || record.note || '已记录'}</span>
+    {record.unit && <span className="text-xs text-slate-400">{record.unit}</span>}
+  </div>
+);
+
+// --- Main Timeline Component ---
 
 export const Timeline: React.FC<TimelineProps> = ({ records }) => {
-  // Sort records descending
-  const sortedRecords = [...records].sort((a, b) => b.timestamp - a.timestamp);
+  if (records.length === 0) {
+    return (
+      <div className="py-12 text-center text-slate-400">
+        <Clock size={48} className="mx-auto mb-4 opacity-20" />
+        <p className="text-sm">暂无记录，快去添加第一条数据吧</p>
+      </div>
+    );
+  }
 
-  // Group by date
+  // Sort and Group Records
+  const sortedRecords = [...records].sort((a, b) => b.timestamp - a.timestamp);
   const groupedGroups: Record<string, BaseRecord[]> = {};
+  
   sortedRecords.forEach(record => {
     const date = new Date(record.timestamp);
     const today = new Date();
     const isToday = date.toDateString() === today.toDateString();
-    const isYesterday = new Date(today.setDate(today.getDate() - 1)).toDateString() === date.toDateString();
+    const isYesterday = new Date(new Date().setDate(today.getDate() - 1)).toDateString() === date.toDateString();
     
     let key = `${date.getMonth() + 1}月${date.getDate()}日`;
     if (isToday) key = '今天';
@@ -141,60 +176,75 @@ export const Timeline: React.FC<TimelineProps> = ({ records }) => {
     groupedGroups[key].push(record);
   });
 
-  if (records.length === 0) {
-      return (
-          <div className="py-12 text-center text-slate-400">
-              <Clock size={48} className="mx-auto mb-4 opacity-20" />
-              <p className="text-sm">暂无记录，快去添加第一条数据吧</p>
-          </div>
-      );
-  }
-
   return (
-    <div className="mt-8">
-      <h3 className="text-lg font-bold text-slate-800 mb-4 px-1">近期记录</h3>
-      <div className="space-y-6">
-        {Object.entries(groupedGroups).map(([date, groupRecords]) => (
-          <div key={date} className="relative">
-             {/* Sticky Date Header for long lists, or just header */}
-             <div className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm py-2 mb-2 flex items-center">
-                 <span className="text-xs font-bold text-slate-400 bg-slate-200/50 px-3 py-1 rounded-full">{date}</span>
-             </div>
-             
-             <div className="relative pl-4 space-y-4">
-                {/* Vertical Line */}
-                <div className="absolute left-[19px] top-2 bottom-4 w-0.5 bg-slate-200"></div>
+    <div className="mt-6 pb-6 px-1">
+      {Object.entries(groupedGroups).map(([dateLabel, groupRecords], groupIdx) => (
+        <div key={dateLabel} className="relative mb-8 last:mb-0">
+          
+          {/* Date Label (Pill) */}
+          <div className="sticky top-0 z-10 flex items-center mb-4 bg-slate-50/90 backdrop-blur-sm py-2">
+            <div className="px-3 py-1 bg-slate-200/60 rounded-full text-xs font-bold text-slate-500 shadow-sm border border-slate-200/50">
+              {dateLabel}
+            </div>
+          </div>
 
-                {groupRecords.map((record, idx) => {
-                    const Icon = ICONS[record.type] || Activity;
-                    const theme = THEMES[record.type] || THEMES.default;
+          {/* Timeline Vertical Line connecting items in this group */}
+          <div className="relative">
+             {/* The Line */}
+             <div className="absolute left-[19px] top-0 bottom-0 w-0.5 bg-slate-200/60 rounded-full" />
 
-                    return (
-                        <div key={record.id} className="relative flex gap-4 items-start group">
-                            {/* Dot/Icon on Line */}
-                            <div className={`relative z-10 w-10 h-10 rounded-full border-4 border-slate-50 flex-shrink-0 flex items-center justify-center ${theme.bg} ${theme.text}`}>
-                                <Icon size={16} />
-                            </div>
+             {/* Records List */}
+             <div className="space-y-4">
+               {groupRecords.map((record) => {
+                 const Icon = ICONS[record.type] || Activity;
+                 const colorClass = TYPE_COLORS[record.type] || TYPE_COLORS.default;
+                 
+                 // Render Specific Card Content
+                 let CardContent = DefaultCard;
+                 if (record.type === 'glucose') CardContent = GlucoseCard;
+                 if (record.type === 'bp') CardContent = BPCard;
+                 if (record.type === 'diet') CardContent = DietCard;
+                 if (record.type === 'medication') CardContent = MedicationCard;
+                 if (record.type === 'weight') CardContent = WeightCard;
+                 if (record.type === 'sleep') CardContent = SleepCard;
 
-                            {/* Card Content */}
-                            <div className="flex-1 bg-white rounded-2xl p-4 shadow-sm border border-slate-100/50 hover:shadow-md transition-shadow">
-                                <div className="flex justify-between items-start mb-1">
-                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{getRecordTitle(record.type)}</span>
-                                    <span className="text-xs text-slate-300 font-mono">
-                                        {new Date(record.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                                    </span>
-                                </div>
-                                <div className="mt-1">
-                                    {formatValue(record)}
-                                </div>
-                            </div>
+                 return (
+                   <div key={record.id} className="relative flex gap-4 pl-1">
+                     
+                     {/* Timeline Node (Icon) */}
+                     <div className={`relative z-10 w-10 h-10 rounded-full border-[3px] border-slate-50 flex items-center justify-center shadow-sm flex-shrink-0 ${colorClass}`}>
+                        <Icon size={16} strokeWidth={2.5} />
+                     </div>
+
+                     {/* Content Card */}
+                     <div className="flex-1 bg-white rounded-2xl p-4 shadow-[0_2px_12px_-4px_rgba(0,0,0,0.06)] border border-slate-100 relative group overflow-hidden">
+                        
+                        {/* Decorative background element for specific types */}
+                        {record.type === 'glucose' && (
+                            <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-teal-50 to-transparent rounded-bl-full opacity-50`} />
+                        )}
+
+                        <div className="flex justify-between items-start mb-2 relative z-10">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider scale-90 origin-left opacity-80">
+                                {record.type === 'bp' ? '血压' : record.type === 'glucose' ? '血糖' : record.type === 'diet' ? '饮食' : record.type === 'medication' ? '用药' : record.type === 'sleep' ? '睡眠' : record.type === 'weight' ? '体重' : '记录'}
+                            </span>
+                            <span className="text-[10px] font-medium text-slate-300 bg-slate-50 px-1.5 py-0.5 rounded-md">
+                                {formatTime(record.timestamp)}
+                            </span>
                         </div>
-                    );
-                })}
+                        
+                        <div className="relative z-10">
+                             <CardContent record={record} />
+                        </div>
+                     </div>
+                   </div>
+                 );
+               })}
              </div>
           </div>
-        ))}
-      </div>
+
+        </div>
+      ))}
     </div>
   );
 };

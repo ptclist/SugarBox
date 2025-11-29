@@ -8,7 +8,7 @@ import { PrivacyOverlay } from './components/PrivacyOverlay';
 import { LoginModal } from './components/LoginModal';
 import { Timeline } from './components/Timeline';
 import { AppState, BaseRecord, RecordType, GlucoseRecord } from './types';
-import { INITIAL_GLUCOSE_DATA } from './constants';
+import { INITIAL_RECORDS } from './constants';
 
 const App: React.FC = () => {
   // --- State ---
@@ -35,14 +35,8 @@ const App: React.FC = () => {
     if (storedRecords) {
         initialRecords = JSON.parse(storedRecords);
     } else {
-        // Migration or Init
-        const oldGlucose = localStorage.getItem('gluco_records');
-        if (oldGlucose) {
-             const parsed = JSON.parse(oldGlucose);
-             initialRecords = parsed.map((r: any) => ({ ...r, type: 'glucose' }));
-        } else {
-             initialRecords = INITIAL_GLUCOSE_DATA.map(r => ({ ...r, type: 'glucose' })) as BaseRecord[];
-        }
+        // Use the new mixed mock data for a better first impression
+        initialRecords = INITIAL_RECORDS;
     }
 
     setState(prev => ({
@@ -81,7 +75,7 @@ const App: React.FC = () => {
     const id = Math.random().toString(36).substr(2, 9);
     
     // Check login for critical actions if desired, or just save locally
-    if (!state.user && state.records.length > 5 && !localStorage.getItem('gluco_login_prompted')) {
+    if (!state.user && state.records.length > 20 && !localStorage.getItem('gluco_login_prompted')) {
         localStorage.setItem('gluco_login_prompted', 'true');
         setPendingRecord({ type, data: { ...data, id, timestamp, type } });
         setRecordModalOpen(false);

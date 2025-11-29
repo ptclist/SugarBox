@@ -1,24 +1,86 @@
 
-import { GlucoseRecord } from './types';
+import { BaseRecord, RecordType } from './types';
 
-// Generate last 7 days of mock data
-const generateMockData = (): GlucoseRecord[] => {
-  const data: GlucoseRecord[] = [];
+// Helper to generate random ID
+const id = () => Math.random().toString(36).substr(2, 9);
+
+// Helper to generate mock data with mixed types
+const generateMockData = (): BaseRecord[] => {
+  const data: BaseRecord[] = [];
   const now = Date.now();
-  for (let i = 6; i >= 0; i--) {
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  // Function to add a record relative to "days ago"
+  const addRecord = (daysAgo: number, hour: number, type: RecordType, payload: any) => {
+    const date = new Date(now - daysAgo * dayMs);
+    date.setHours(hour, Math.floor(Math.random() * 60), 0, 0);
+    
     data.push({
-      id: `mock-${i}`,
-      value: Number((5.5 + Math.random() * 2).toFixed(1)), // Random between 5.5 and 7.5
-      type: 'glucose',
-      context: 'fasting',
+      id: id(),
+      timestamp: date.getTime(),
+      type,
+      ...payload
+    });
+  };
+
+  // Generate 3 days of data
+  for (let i = 0; i < 3; i++) {
+    // 1. Morning: Fasting Glucose
+    addRecord(i, 7, 'glucose', {
+      value: Number((5.2 + Math.random() * 1.5).toFixed(1)),
       unit: 'mmol/L',
-      timestamp: now - i * 24 * 60 * 60 * 1000,
+      context: 'fasting'
+    });
+
+    // 2. Morning: Weight (every other day)
+    if (i % 2 === 0) {
+      addRecord(i, 7, 'weight', {
+        value: Number((65 + Math.random()).toFixed(1)),
+        unit: 'kg'
+      });
+    }
+
+    // 3. Breakfast Diet
+    addRecord(i, 8, 'diet', {
+      food: '全麦面包, 鸡蛋, 牛奶',
+      mealType: 'breakfast',
+      calories: 350
+    });
+
+    // 4. Lunch: Medication
+    addRecord(i, 12, 'medication', {
+      name: '二甲双胍',
+      dosage: '0.5g'
+    });
+
+    // 5. Afternoon: Glucose
+    addRecord(i, 14, 'glucose', {
+      value: Number((6.5 + Math.random() * 2).toFixed(1)),
+      unit: 'mmol/L',
+      context: 'post-lunch'
+    });
+
+    // 6. Evening: Blood Pressure (randomly)
+    if (Math.random() > 0.3) {
+      addRecord(i, 19, 'bp', {
+        systolic: 118 + Math.floor(Math.random() * 20),
+        diastolic: 75 + Math.floor(Math.random() * 10),
+        pulse: 70 + Math.floor(Math.random() * 15),
+        position: 'sitting'
+      });
+    }
+
+    // 7. Night: Sleep (for previous night)
+    addRecord(i, 23, 'sleep', {
+      duration: Number((7 + Math.random()).toFixed(1)),
+      quality: Math.random() > 0.5 ? 'good' : 'fair'
     });
   }
-  return data;
+
+  return data.sort((a, b) => b.timestamp - a.timestamp);
 };
 
-export const INITIAL_GLUCOSE_DATA = generateMockData();
+export const INITIAL_RECORDS = generateMockData();
 
 export const PRIVACY_TEXT = `
   <strong>隐私政策协议</strong><br/><br/>
