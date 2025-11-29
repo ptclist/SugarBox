@@ -1,45 +1,80 @@
+
 export interface User {
   id: string;
   name: string;
   avatar?: string;
 }
 
-export type RecordType = 'glucose' | 'bp' | 'medication' | 'diet';
+export type RecordType = 
+  | 'glucose' 
+  | 'bp' 
+  | 'medication' 
+  | 'diet'
+  | 'weight'
+  | 'height'
+  | 'temperature'
+  | 'heartRate'
+  | 'exercise'
+  | 'symptoms'
+  | 'sleep'
+  | 'mood'
+  | 'oxygen'
+  | 'steps'
+  | 'hydration';
 
-export interface GlucoseRecord {
+export interface BaseRecord {
   id: string;
-  value: number; // mmol/L
-  type: 'fasting' | 'post-meal' | 'random';
   timestamp: number;
+  type: RecordType;
+  [key: string]: any; // Payload specific to the type
 }
 
-export interface BPRecord {
-  id: string;
+// Specific Payload Interfaces
+export interface GlucoseData {
+  value: number;
+  unit: 'mmol/L' | 'mg/dL';
+  context: 'fasting' | 'post-meal' | 'pre-meal' | 'bedtime' | 'post-breakfast' | 'post-lunch' | 'post-dinner';
+}
+
+export interface GlucoseRecord extends BaseRecord, GlucoseData {
+  type: 'glucose';
+}
+
+export interface BPData {
   systolic: number;
   diastolic: number;
-  position: 'sitting' | 'lying';
-  timestamp: number;
+  pulse?: number;
+  position?: 'sitting' | 'lying' | 'standing';
+  arm?: 'left' | 'right';
 }
 
-export interface MedRecord {
-  id: string;
+export interface DietData {
+  food: string;
+  calories?: number;
+  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+}
+
+export interface MedicationData {
   name: string;
   dosage: string;
-  timestamp: number;
+  unit?: string;
 }
 
-export interface DietRecord {
-  id: string;
-  food: string;
-  mealType: 'breakfast' | 'lunch' | 'dinner' | 'snack';
-  timestamp: number;
+export interface SleepData {
+  duration: number; // hours
+  quality: 'poor' | 'fair' | 'good' | 'excellent';
+  bedTime?: string;
+  wakeTime?: string;
+}
+
+export interface MoodData {
+  scale: 1 | 2 | 3 | 4 | 5;
+  factors: string[];
+  note?: string;
 }
 
 export interface AppState {
   privacyAccepted: boolean;
   user: User | null;
-  glucoseRecords: GlucoseRecord[];
-  bpRecords: BPRecord[];
-  medRecords: MedRecord[];
-  dietRecords: DietRecord[];
+  records: BaseRecord[]; 
 }

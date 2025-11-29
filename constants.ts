@@ -1,3 +1,4 @@
+
 import { GlucoseRecord } from './types';
 
 // Generate last 7 days of mock data
@@ -8,7 +9,9 @@ const generateMockData = (): GlucoseRecord[] => {
     data.push({
       id: `mock-${i}`,
       value: Number((5.5 + Math.random() * 2).toFixed(1)), // Random between 5.5 and 7.5
-      type: 'fasting',
+      type: 'glucose',
+      context: 'fasting',
+      unit: 'mmol/L',
       timestamp: now - i * 24 * 60 * 60 * 1000,
     });
   }

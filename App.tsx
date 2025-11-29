@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
-import { Settings, LogOut, ChevronRight, Droplet, Clock, User, PlusCircle } from 'lucide-react';
+import { Settings, LogOut, ChevronRight, Droplet, Clock, User as UserIcon, PlusCircle, ArrowRight } from 'lucide-react';
 import { GlucoseChart } from './components/GlucoseChart';
 import { RecordModal } from './components/RecordModal';
 import { BottomNav } from './components/BottomNav';
 import { PrivacyOverlay } from './components/PrivacyOverlay';
 import { LoginModal } from './components/LoginModal';
-import { AppState, GlucoseRecord, RecordType } from './types';
+import { AppState, BaseRecord, RecordType } from './types';
 import { INITIAL_GLUCOSE_DATA } from './constants';
 
 const App: React.FC = () => {
@@ -13,14 +14,12 @@ const App: React.FC = () => {
   const [state, setState] = useState<AppState>({
     privacyAccepted: false,
     user: null,
-    glucoseRecords: [],
-    bpRecords: [],
-    medRecords: [],
-    dietRecords: []
+    records: [],
   });
   
   const [activeTab, setActiveTab] = useState('home');
   const [isRecordModalOpen, setRecordModalOpen] = useState(false);
+  const [initialRecordType, setInitialRecordType] = useState<RecordType | undefined>(undefined);
   const [isLoginModalOpen, setLoginModalOpen] = useState(false);
   const [pendingRecord, setPendingRecord] = useState<{type: RecordType, data: any} | null>(null);
 
@@ -29,22 +28,35 @@ const App: React.FC = () => {
     // Initialize from local storage
     const storedPrivacy = localStorage.getItem('gluco_privacy');
     const storedUser = localStorage.getItem('gluco_user');
-    const storedGlucose = localStorage.getItem('gluco_records');
+    const storedRecords = localStorage.getItem('gluco_records_v2');
+
+    let initialRecords: BaseRecord[] = [];
+    if (storedRecords) {
+        initialRecords = JSON.parse(storedRecords);
+    } else {
+        // Migration or Init
+        const oldGlucose = localStorage.getItem('gluco_records');
+        if (oldGlucose) {
+             const parsed = JSON.parse(oldGlucose);
+             initialRecords = parsed.map((r: any) => ({ ...r, type: 'glucose' }));
+        } else {
+             initialRecords = INITIAL_GLUCOSE_DATA.map(r => ({ ...r, type: 'glucose' })) as BaseRecord[];
+        }
+    }
 
     setState(prev => ({
       ...prev,
       privacyAccepted: storedPrivacy === 'true',
       user: storedUser ? JSON.parse(storedUser) : null,
-      glucoseRecords: storedGlucose ? JSON.parse(storedGlucose) : INITIAL_GLUCOSE_DATA
+      records: initialRecords
     }));
   }, []);
 
   useEffect(() => {
-    // Persist records when they change
-    if (state.glucoseRecords.length > 0) {
-        localStorage.setItem('gluco_records', JSON.stringify(state.glucoseRecords));
+    if (state.records.length > 0) {
+        localStorage.setItem('gluco_records_v2', JSON.stringify(state.records));
     }
-  }, [state.glucoseRecords]);
+  }, [state.records]);
 
   // --- Handlers ---
   const handlePrivacyAction = (accepted: boolean) => {
@@ -52,90 +64,94 @@ const App: React.FC = () => {
       localStorage.setItem('gluco_privacy', 'true');
       setState(prev => ({ ...prev, privacyAccepted: true }));
     } else {
-      // Simulate close
       window.close();
       alert("应用需要同意隐私协议才能继续。请关闭页面。");
     }
+  };
+
+  // Open modal with specific type (e.g. from Home button) or undefined (from FAB for grid)
+  const openRecordModal = (type?: RecordType) => {
+      setInitialRecordType(type);
+      setRecordModalOpen(true);
   };
 
   const handleRecordSubmit = (type: RecordType, data: any) => {
     const timestamp = Date.now();
     const id = Math.random().toString(36).substr(2, 9);
     
-    // Check login status for "Strict" logging, but request implies trigger on submit
-    if (!state.user) {
-        setPendingRecord({ type, data: { ...data, id, timestamp } });
+    // Check login for critical actions if desired, or just save locally
+    if (!state.user && state.records.length > 5 && !localStorage.getItem('gluco_login_prompted')) {
+        localStorage.setItem('gluco_login_prompted', 'true');
+        setPendingRecord({ type, data: { ...data, id, timestamp, type } });
         setRecordModalOpen(false);
         setLoginModalOpen(true);
         return;
     }
 
-    saveRecord(type, { ...data, id, timestamp });
+    saveRecord({ ...data, id, timestamp, type });
     setRecordModalOpen(false);
   };
 
-  const saveRecord = (type: RecordType, record: any) => {
-    if (type === 'glucose') {
-        setState(prev => ({
-            ...prev,
-            glucoseRecords: [record, ...prev.glucoseRecords]
-        }));
-    } else {
-        // Handle other types appropriately (simplified for this demo)
-        console.log(`Saved ${type} record:`, record);
-    }
+  const saveRecord = (record: BaseRecord) => {
+    setState(prev => ({
+        ...prev,
+        records: [record, ...prev.records]
+    }));
   };
 
   const handleLogin = () => {
-    // Simulate WeChat Login
-    const mockUser = { id: 'u1', name: '游客用户', avatar: 'https://picsum.photos/100' };
+    const mockUser = { id: 'u1', name: '微信用户', avatar: 'https://picsum.photos/100' };
     localStorage.setItem('gluco_user', JSON.stringify(mockUser));
     setState(prev => ({ ...prev, user: mockUser }));
     setLoginModalOpen(false);
     
-    // Resume pending action
     if (pendingRecord) {
-        saveRecord(pendingRecord.type, pendingRecord.data);
+        saveRecord(pendingRecord.data);
         setPendingRecord(null);
     }
   };
 
   const handleGuestContinue = () => {
       setLoginModalOpen(false);
-      // Allow saving in guest mode too
       if (pendingRecord) {
-          saveRecord(pendingRecord.type, pendingRecord.data);
+          saveRecord(pendingRecord.data);
           setPendingRecord(null);
       }
   };
 
   const clearCache = () => {
-      if(window.confirm("确定要清除所有本地数据吗？")) {
+      if(window.confirm("确定要清除所有本地数据吗？此操作无法撤销。")) {
           localStorage.clear();
           window.location.reload();
       }
   };
 
-  const getLatestGlucose = (): GlucoseRecord | undefined => {
-      if (state.glucoseRecords.length === 0) return undefined;
-      return state.glucoseRecords.reduce((prev, current) => (prev.timestamp > current.timestamp) ? prev : current);
-  };
-
-  const latest = getLatestGlucose();
-  const getStatusColor = (val: number) => {
-      if (val < 3.9) return 'text-orange-500';
-      if (val > 7.8) return 'text-rose-500';
-      return 'text-teal-600';
-  };
+  // --- Render Helpers ---
+  const glucoseRecords = state.records.filter(r => r.type === 'glucose');
+  const latestGlucose = glucoseRecords.length > 0 
+    ? glucoseRecords.reduce((prev, current) => (prev.timestamp > current.timestamp) ? prev : current) 
+    : undefined;
 
   const getGreeting = () => {
-      const hour = new Date().getHours();
-      if (hour < 12) return '早上好';
-      if (hour < 18) return '下午好';
-      return '晚上好';
-  }
+    const hour = new Date().getHours();
+    if (hour < 11) return '早上好';
+    if (hour < 13) return '中午好';
+    if (hour < 18) return '下午好';
+    return '晚上好';
+  };
 
-  // --- Render ---
+  const getGlucoseStatusColor = (val: number) => {
+    if (val < 3.9) return 'text-red-500';
+    if (val > 11.1) return 'text-orange-500';
+    return 'text-teal-600';
+  };
+
+  const getGlucoseStatusText = (val: number) => {
+    if (val < 3.9) return '偏低';
+    if (val > 11.1) return '偏高';
+    return '正常';
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-24 text-slate-800">
       {!state.privacyAccepted && (
@@ -145,150 +161,158 @@ const App: React.FC = () => {
         />
       )}
 
-      <RecordModal 
-        isOpen={isRecordModalOpen} 
-        onClose={() => setRecordModalOpen(false)} 
-        onSubmit={handleRecordSubmit} 
-      />
-
       <LoginModal 
         isOpen={isLoginModalOpen} 
         onLogin={handleLogin} 
         onCancel={handleGuestContinue} 
       />
 
-      {/* --- HOME VIEW --- */}
+      <RecordModal 
+        isOpen={isRecordModalOpen} 
+        onClose={() => setRecordModalOpen(false)} 
+        onSubmit={handleRecordSubmit}
+        initialType={initialRecordType}
+      />
+
+      {/* --- Page: Home --- */}
       {activeTab === 'home' && (
-        <main className="p-6 max-w-md mx-auto animate-[fadeIn_0.5s]">
+        <div className="p-6 pt-12 animate-[fadeIn_0.5s]">
           {/* Header */}
-          <header className="flex justify-between items-center mb-8 pt-4">
+          <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-2xl font-bold text-slate-800">{getGreeting()}，</h1>
-              <p className="text-slate-500 text-sm">{state.user ? state.user.name : '访客'}</p>
+              <h1 className="text-2xl font-bold text-slate-900">{getGreeting()}，{state.user ? state.user.name : '访客'}</h1>
+              <p className="text-slate-400 text-sm mt-1">今天感觉怎么样？</p>
             </div>
             <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm">
-                {state.user?.avatar ? <img src={state.user.avatar} alt="Avatar" /> : <div className="w-full h-full bg-slate-300 flex items-center justify-center text-slate-500"><Settings size={16}/></div>}
-            </div>
-          </header>
-
-          {/* Main Card */}
-          <div className="bg-white rounded-[2rem] p-6 shadow-soft shadow-teal-500/10 relative overflow-hidden mb-4">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-teal-50 rounded-full -mr-10 -mt-10 blur-2xl opacity-60"></div>
-            
-            <div className="flex justify-between items-start relative z-10">
-              <div>
-                <span className="inline-block px-3 py-1 rounded-full bg-teal-50 text-teal-700 text-xs font-bold tracking-wide mb-2">
-                  最新血糖
-                </span>
-                <div className="flex items-baseline gap-1">
-                  <h2 className={`text-6xl font-bold tracking-tight ${latest ? getStatusColor(latest.value) : 'text-slate-300'}`}>
-                    {latest ? latest.value.toFixed(1) : '--'}
-                  </h2>
-                  <span className="text-slate-400 font-medium">mmol/L</span>
-                </div>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-2xl">
-                 <Droplet size={24} className={latest ? getStatusColor(latest.value) : 'text-slate-300'} fill="currentColor" fillOpacity={0.2} />
-              </div>
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-slate-100 flex justify-between text-sm text-slate-500">
-               <span className="flex items-center gap-1"><Clock size={14}/> {latest ? new Date(latest.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : '--:--'}</span>
-               <span className="capitalize">{latest ? (latest.type === 'fasting' ? '空腹' : '餐后') : '暂无数据'}</span>
+                {state.user?.avatar ? (
+                    <img src={state.user.avatar} alt="avatar" className="w-full h-full object-cover" />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-400">
+                        <UserIcon size={20} />
+                    </div>
+                )}
             </div>
           </div>
 
-          {/* Explicit Record Button (Requested feature) */}
-          <button 
-            onClick={() => setRecordModalOpen(true)}
-            className="w-full bg-white border-2 border-dashed border-teal-200 text-teal-600 font-semibold py-3.5 rounded-2xl mb-6 hover:bg-teal-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-          >
-            <PlusCircle size={20} />
-            立即记录血糖
-          </button>
+          {/* Main Card: Latest Glucose */}
+          <div className="relative overflow-hidden bg-white rounded-3xl shadow-soft p-6 mb-6 transition-all active:scale-[0.99]">
+             <div className="absolute top-0 right-0 p-4 opacity-10">
+                <Droplet size={120} className="text-teal-500 transform rotate-12" />
+             </div>
+             
+             <div className="relative z-10">
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="px-2.5 py-1 rounded-full bg-teal-50 text-teal-700 text-xs font-bold uppercase tracking-wide">
+                        最新血糖
+                    </span>
+                    <span className="text-slate-400 text-xs">
+                        {latestGlucose 
+                            ? new Date(latestGlucose.timestamp).toLocaleTimeString('zh-CN', {hour: '2-digit', minute:'2-digit'}) 
+                            : '--:--'}
+                    </span>
+                </div>
+
+                <div className="flex items-end gap-3 mt-4 mb-6">
+                    <span className={`text-6xl font-bold tracking-tighter ${latestGlucose ? getGlucoseStatusColor(latestGlucose.value) : 'text-slate-300'}`}>
+                        {latestGlucose ? latestGlucose.value.toFixed(1) : '--'}
+                    </span>
+                    <span className="text-slate-400 text-lg font-medium mb-2">mmol/L</span>
+                </div>
+
+                {latestGlucose && (
+                     <div className="flex items-center gap-2 mb-6">
+                        <div className={`w-2.5 h-2.5 rounded-full ${latestGlucose.value > 11.1 ? 'bg-orange-500' : latestGlucose.value < 3.9 ? 'bg-red-500' : 'bg-teal-500'}`}></div>
+                        <span className="text-sm font-medium text-slate-600">
+                            {getGlucoseStatusText(latestGlucose.value)}
+                        </span>
+                        <span className="text-xs text-slate-400 ml-auto">
+                            {latestGlucose.context === 'fasting' ? '空腹' : '餐后'}
+                        </span>
+                     </div>
+                )}
+                
+                {/* Primary Action: Record Glucose */}
+                <button 
+                    onClick={() => openRecordModal('glucose')}
+                    className="w-full py-3.5 bg-gradient-to-r from-teal-500 to-emerald-400 rounded-xl text-white font-semibold shadow-lg shadow-teal-200/50 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                >
+                    <PlusCircle size={20} />
+                    立即记录血糖
+                </button>
+             </div>
+          </div>
 
           {/* Chart Section */}
-          <div className="mb-6">
-            <h3 className="font-bold text-lg text-slate-700 mb-2 px-2">7日趋势</h3>
-            <div className="bg-white rounded-2xl p-4 shadow-soft h-64">
-                <GlucoseChart data={state.glucoseRecords} />
+          <div className="bg-white rounded-3xl shadow-soft p-6 mb-24">
+            <div className="flex items-center justify-between mb-2">
+                <h3 className="font-bold text-slate-800">7天趋势</h3>
+                <button className="text-teal-600 text-xs font-semibold flex items-center gap-1">
+                    详情 <ChevronRight size={14} />
+                </button>
             </div>
+            <GlucoseChart data={glucoseRecords} />
           </div>
-        </main>
+        </div>
       )}
 
-      {/* --- PROFILE VIEW --- */}
+      {/* --- Page: Profile --- */}
       {activeTab === 'profile' && (
-        <main className="p-6 max-w-md mx-auto animate-[fadeIn_0.5s]">
-           <header className="mb-8 pt-4">
-              <h1 className="text-2xl font-bold text-slate-800">个人中心</h1>
-           </header>
-
-           {!state.user && (
-               <div 
-                onClick={() => setLoginModalOpen(true)}
-                className="bg-gradient-to-r from-teal-500 to-emerald-400 rounded-2xl p-6 text-white shadow-lg shadow-teal-200 mb-6 cursor-pointer transform transition hover:scale-[1.02]"
-               >
-                   <div className="flex items-center gap-4">
-                       <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center">
-                           <User size={32} />
-                       </div>
-                       <div>
-                           <h3 className="font-bold text-lg">登录 / 注册</h3>
-                           <p className="text-teal-50 text-sm">同步数据，永久保存</p>
-                       </div>
-                       <ChevronRight className="ml-auto opacity-70" />
-                   </div>
-               </div>
-           )}
-
-           {state.user && (
-               <div className="bg-white rounded-2xl p-6 shadow-soft mb-6 flex items-center gap-4">
-                    <img src={state.user.avatar} className="w-16 h-16 rounded-full" alt="User" />
+        <div className="p-6 pt-12 animate-[fadeIn_0.5s]">
+            <h1 className="text-2xl font-bold text-slate-900 mb-8">个人中心</h1>
+            
+            {!state.user ? (
+                <div className="bg-gradient-to-br from-teal-500 to-emerald-500 rounded-3xl p-6 text-white shadow-lg shadow-teal-200 mb-8">
+                    <h2 className="text-xl font-bold mb-2">登录同步数据</h2>
+                    <p className="text-teal-50 text-sm mb-6 opacity-90">开启云端同步，更换设备数据不丢失，享受更多健康分析。</p>
+                    <button 
+                        onClick={() => setLoginModalOpen(true)}
+                        className="bg-white text-teal-600 px-6 py-2.5 rounded-full font-bold text-sm shadow-sm active:scale-95 transition-transform"
+                    >
+                        立即登录
+                    </button>
+                </div>
+            ) : (
+                <div className="bg-white rounded-3xl p-6 shadow-soft mb-8 flex items-center gap-4">
+                    <img src={state.user.avatar} alt="avatar" className="w-16 h-16 rounded-full bg-slate-100" />
                     <div>
-                        <h3 className="font-bold text-lg">{state.user.name}</h3>
-                        <p className="text-slate-400 text-sm">高级会员</p>
+                        <h2 className="text-lg font-bold text-slate-800">{state.user.name}</h2>
+                        <p className="text-xs text-slate-400">ID: {state.user.id}</p>
                     </div>
-               </div>
-           )}
+                </div>
+            )}
 
-           <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
-               <div className="p-4 border-b border-slate-50 flex items-center justify-between cursor-pointer hover:bg-slate-50">
-                   <span className="font-medium text-slate-700">导出健康数据</span>
-                   <ChevronRight size={18} className="text-slate-300" />
-               </div>
-               <div className="p-4 border-b border-slate-50 flex items-center justify-between cursor-pointer hover:bg-slate-50">
-                   <span className="font-medium text-slate-700">隐私协议</span>
-                   <ChevronRight size={18} className="text-slate-300" />
-               </div>
-               <div className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50">
-                   <span className="font-medium text-slate-700">服务条款</span>
-                   <ChevronRight size={18} className="text-slate-300" />
-               </div>
-           </div>
+            <div className="bg-white rounded-3xl shadow-soft overflow-hidden">
+                <div className="p-4 border-b border-slate-50 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center"><Settings size={18} /></div>
+                        <span className="text-slate-700 font-medium">设置</span>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300" />
+                </div>
+                <div 
+                    onClick={clearCache}
+                    className="p-4 flex items-center justify-between hover:bg-red-50 transition-colors cursor-pointer group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center group-hover:bg-red-100 transition-colors"><LogOut size={18} /></div>
+                        <span className="text-slate-700 font-medium group-hover:text-red-600">清除本地缓存</span>
+                    </div>
+                </div>
+            </div>
 
-           <button 
-             onClick={clearCache}
-             className="mt-8 w-full py-4 rounded-xl border border-red-100 text-red-500 font-medium bg-white hover:bg-red-50 flex items-center justify-center gap-2 transition-colors"
-           >
-               <LogOut size={18} />
-               清除本地缓存
-           </button>
-           
-           <div className="mt-8 text-center">
-               <p className="text-xs text-slate-400">GlucoGuard Pro v1.0.0</p>
-               <div className="flex justify-center gap-4 mt-2">
-                   <a href="#" className="text-[10px] text-slate-300 underline">法律条款</a>
-                   <a href="#" className="text-[10px] text-slate-300 underline">隐私政策</a>
-               </div>
-           </div>
-        </main>
+            <div className="mt-12 text-center">
+                <p className="text-xs text-slate-300 mb-2">GlucoGuard Pro v1.0.0</p>
+                <a href="#" className="text-xs text-slate-400 hover:text-teal-600 underline">隐私政策</a>
+                <span className="text-slate-300 mx-2">|</span>
+                <a href="#" className="text-xs text-slate-400 hover:text-teal-600 underline">用户协议</a>
+            </div>
+        </div>
       )}
 
       <BottomNav 
         activeTab={activeTab} 
         onTabChange={setActiveTab} 
-        onAddClick={() => setRecordModalOpen(true)} 
+        onAddClick={() => openRecordModal()} 
       />
     </div>
   );
