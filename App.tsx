@@ -94,10 +94,10 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleLogin = () => {
-    const mockUser = { id: 'u1', name: '微信用户', avatar: 'https://picsum.photos/100' };
-    localStorage.setItem('gluco_user', JSON.stringify(mockUser));
-    setState(prev => ({ ...prev, user: mockUser }));
+  const handleLogin = (userInfo?: any) => {
+    const user = userInfo || { id: 'u1', name: '微信用户', avatar: 'https://picsum.photos/100' };
+    localStorage.setItem('gluco_user', JSON.stringify(user));
+    setState(prev => ({ ...prev, user }));
     setLoginModalOpen(false);
     
     if (pendingRecord) {
@@ -178,11 +178,14 @@ const App: React.FC = () => {
               <h1 className="text-2xl font-bold text-slate-900">{getGreeting()}，{state.user ? state.user.name : '访客'}</h1>
               <p className="text-slate-400 text-sm mt-1">今天感觉怎么样？</p>
             </div>
-            <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm">
+            <div 
+                onClick={() => !state.user && setLoginModalOpen(true)}
+                className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden border-2 border-white shadow-sm cursor-pointer"
+            >
                 {state.user?.avatar ? (
                     <img src={state.user.avatar} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-400">
+                    <div className="w-full h-full flex items-center justify-center text-slate-400 bg-slate-100">
                         <UserIcon size={20} />
                     </div>
                 )}
@@ -271,7 +274,7 @@ const App: React.FC = () => {
                 </div>
             ) : (
                 <div className="bg-white rounded-3xl p-6 shadow-soft mb-8 flex items-center gap-4">
-                    <img src={state.user.avatar} alt="avatar" className="w-16 h-16 rounded-full bg-slate-100" />
+                    <img src={state.user.avatar} alt="avatar" className="w-16 h-16 rounded-full bg-slate-100 object-cover" />
                     <div>
                         <h2 className="text-lg font-bold text-slate-800">{state.user.name}</h2>
                         <p className="text-xs text-slate-400">ID: {state.user.id}</p>
@@ -287,6 +290,22 @@ const App: React.FC = () => {
                     </div>
                     <ChevronRight size={18} className="text-slate-300" />
                 </div>
+                {state.user && (
+                    <div 
+                        onClick={() => {
+                            if(window.confirm('确定要退出登录吗？')) {
+                                setState(s => ({...s, user: null}));
+                                localStorage.removeItem('gluco_user');
+                            }
+                        }}
+                        className="p-4 border-b border-slate-50 flex items-center justify-between hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center"><LogOut size={18} /></div>
+                            <span className="text-slate-700 font-medium">退出登录</span>
+                        </div>
+                    </div>
+                )}
                 <div 
                     onClick={clearCache}
                     className="p-4 flex items-center justify-between hover:bg-red-50 transition-colors cursor-pointer group"
